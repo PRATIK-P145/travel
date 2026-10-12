@@ -31,7 +31,7 @@ Missing or malformed parts of an AI response are filled from the fallback plan, 
 ## Prerequisites
 
 - Python 3.10 or newer
-- Optional: a [Gemini API key](https://aistudio.google.com/apikey) and a [SerpApi key](https://serpapi.com/)
+- Optional: a [Gemini API key](https://aistudio.google.com/apikey), a [Groq API key](https://console.groq.com/keys) for backup generation, and a [SerpApi key](https://serpapi.com/)
 
 ## Installation
 
@@ -82,7 +82,7 @@ Health (reports which integrations are configured, never the keys):
 
 ```bash
 curl http://127.0.0.1:8000/api/health
-# {"status":"ok","mode":"demo","integrations":{"gemini":{"configured":false,"model":"gemini-3.8-flash"},"serpapi":{"configured":false}}}
+# {"status":"ok","mode":"demo","integrations":{"gemini":{"configured":false,"model":"gemini-3.8-flash"},"groq":{"configured":false,"model":"openai/gpt-oss-120b"},"serpapi":{"configured":false}}}
 ```
 
 Plan a trip. Provide either `return_date` or `duration_days` (1 to 14 days):
