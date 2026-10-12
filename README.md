@@ -48,12 +48,12 @@ Edit `.env`. Both keys are optional.
 | Variable | Purpose | Default |
 | --- | --- | --- |
 | `GEMINI_API_KEY` | Enables AI itinerary generation | empty (demo itinerary) |
-| `GEMINI_MODEL` | Gemini model name | `gemini-2.5-flash` |
+| `GEMINI_MODEL` | Gemini model name | `gemini-3.8-flash` |
 | `GEMINI_TIMEOUT_SECONDS` | Per-request timeout in seconds (10–120; invalid values use the default) | `35` |
 | `GEMINI_MAX_OUTPUT_TOKENS` | Maximum generated output tokens (1024–8192; invalid values use the default) | `8192` |
 | `SERPAPI_API_KEY` | Enables live Google Search and Maps research | empty (no research) |
 
-Keys are never returned by the API. `.env` is git-ignored. For reliable troubleshooting, start with `GEMINI_MODEL=gemini-2.5-flash`; use a model name available to your API key. A timeout is a slow/unanswered request, not proof that the key is invalid. The app logs distinguish authentication, permission, model, quota, network, timeout and malformed-response failures.
+Keys are never returned by the API. `.env` is git-ignored. For reliable troubleshooting, start with `GEMINI_MODEL=gemini-3.8-flash`; use a model name available to your API key. A timeout is a slow/unanswered request, not proof that the key is invalid. The app logs distinguish authentication, permission, model, quota, network, timeout and malformed-response failures.
 
 ## Run locally
 
@@ -77,7 +77,7 @@ Health (reports which integrations are configured, never the keys):
 
 ```bash
 curl http://127.0.0.1:8000/api/health
-# {"status":"ok","mode":"demo","integrations":{"gemini":{"configured":false,"model":"gemini-2.5-flash"},"serpapi":{"configured":false}}}
+# {"status":"ok","mode":"demo","integrations":{"gemini":{"configured":false,"model":"gemini-3.8-flash"},"serpapi":{"configured":false}}}
 ```
 
 Plan a trip. Provide either `return_date` or `duration_days` (1 to 14 days):
