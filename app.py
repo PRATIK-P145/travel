@@ -39,11 +39,12 @@ log = logging.getLogger("travel_genie.app")
 async def lifespan(_: FastAPI):
     # Booleans and the model name only; keys are never logged.
     log.info(
-        "Startup: env_file_found=%s GEMINI_API_KEY_set=%s GEMINI_MODEL=%s SERPAPI_API_KEY_set=%s",
-        settings.env_file_found(), bool(settings.gemini_key()), settings.gemini_model(), bool(settings.serpapi_key()),
+        "Startup: env_file_found=%s GEMINI_API_KEY_set=%s GEMINI_MODEL=%s GROQ_API_KEY_set=%s GROQ_MODEL=%s SERPAPI_API_KEY_set=%s",
+        settings.env_file_found(), bool(settings.gemini_key()), settings.gemini_model(),
+        bool(settings.groq_key()), settings.groq_model(), bool(settings.serpapi_key()),
     )
-    if not settings.gemini_key():
-        log.warning("GEMINI_API_KEY is not set: itineraries will come from DEMO MODE templates.")
+    if not settings.gemini_key() and not settings.groq_key():
+        log.warning("Neither GEMINI_API_KEY nor GROQ_API_KEY is set: itineraries will come from DEMO MODE templates.")
     yield
 
 
@@ -119,13 +120,14 @@ async def unhandled_handler(request: Request, exc: Exception):
 
 @app.get("/api/health")
 async def health():
-    gemini_ok, serp_ok = bool(settings.gemini_key()), bool(settings.serpapi_key())
+    gemini_ok, groq_ok, serp_ok = bool(settings.gemini_key()), bool(settings.groq_key()), bool(settings.serpapi_key())
     return {
         "status": "ok",
-        "mode": "live" if gemini_ok else "demo",
+        "mode": "live" if gemini_ok or groq_ok else "demo",
         "env_file_found": settings.env_file_found(),
         "integrations": {
             "gemini": {"configured": gemini_ok, "model": settings.gemini_model()},
+            "groq": {"configured": groq_ok, "model": settings.groq_model()},
             "serpapi": {"configured": serp_ok},
         },
     }
