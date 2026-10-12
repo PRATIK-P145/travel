@@ -30,3 +30,8 @@ def test_gemini_token_limit_is_bounded(monkeypatch):
 
     monkeypatch.setenv("GEMINI_MAX_OUTPUT_TOKENS", "oops")
     assert settings.gemini_max_output_tokens() == 8192
+
+
+def test_gemini_model_defaults_to_3_8_flash(monkeypatch):
+    monkeypatch.delenv("GEMINI_MODEL", raising=False)
+    assert settings.gemini_model() == "gemini-3.8-flash"
