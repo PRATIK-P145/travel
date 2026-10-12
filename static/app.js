@@ -6,6 +6,7 @@
   var results = document.getElementById("results");
   var submitBtn = document.getElementById("submit-btn");
   var pill = document.getElementById("mode-pill");
+  var discoverLink = document.getElementById("discover-link");
   var depart = document.getElementById("departure_date");
   var ret = document.getElementById("return_date");
   var duration = document.getElementById("duration_days");
@@ -116,6 +117,18 @@
 
   function clearInvalid() {
     form.querySelectorAll("[aria-invalid]").forEach(function (el) { el.removeAttribute("aria-invalid"); });
+  }
+
+  if (discoverLink) {
+    discoverLink.addEventListener("click", function () {
+      var destination = document.getElementById("destination").value.trim();
+      if (destination) {
+        var params = new URLSearchParams({ destination: destination, category: "tourist attractions" });
+        discoverLink.href = "/discover?" + params.toString();
+      } else {
+        discoverLink.href = "/discover";
+      }
+    });
   }
 
   form.addEventListener("submit", function (e) {
