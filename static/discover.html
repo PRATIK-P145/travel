@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Explore places | Travel-Genie</title>
+  <meta name="description" content="Discover places, stays and restaurants across India with Travel-Genie.">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%A7%9E%3C/text%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Figtree:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+  <header class="top">
+    <div class="wrap top-row">
+      <a class="brand brand-link" href="/" aria-label="Travel-Genie home">Travel-Genie</a>
+      <a class="btn top-link" href="/">← Back to trip planner</a>
+    </div>
+  </header>
+  <main class="wrap discover-main">
+    <section class="hero discover-hero">
+      <p class="eyebrow">EXPLORE INDIA</p>
+      <h1>Find your next stop.</h1>
+      <p class="lede">Search live Google Maps results for destinations across India. Open a result for more details, or try a different category.</p>
+    </section>
+    <form id="discover-form" class="discover-search" novalidate>
+      <div class="field discover-destination">
+        <label for="destination">City or destination in India</label>
+        <input id="destination" name="destination" maxlength="100" placeholder="e.g. Jaipur, Kerala, Hampi" required>
+      </div>
+      <div class="field discover-category">
+        <label for="category">What are you looking for?</label>
+        <select id="category" name="category">
+          <option value="tourist attractions">Tourist attractions</option>
+          <option value="hotels and resorts">Hotels & resorts</option>
+          <option value="restaurants and local food">Restaurants & local food</option>
+          <option value="cafes">Cafes</option>
+          <option value="museums and historical places">Museums & history</option>
+          <option value="nature parks and viewpoints">Nature & viewpoints</option>
+          <option value="shopping places and markets">Shopping & markets</option>
+          <option value="family activities">Family activities</option>
+        </select>
+      </div>
+      <button class="go discover-submit" id="discover-submit" type="submit">Search places</button>
+    </form>
+    <p class="fine discover-note">Results are provided by SerpApi / Google Maps. Ratings, hours and prices may be incomplete or change; confirm details with the provider. Booking is not available in this prototype.</p>
+    <section id="discover-results" class="discover-results" aria-live="polite" tabindex="-1"></section>
+  </main>
+  <footer class="wrap foot"><p>Travel-Genie · Explore now, booking agent coming later.</p></footer>
+  <dialog id="offline-dialog" class="offline-dialog" aria-labelledby="offline-title">
+    <div class="offline-content">
+      <span class="offline-icon" aria-hidden="true">✦</span>
+      <h2 id="offline-title">Agent is offline</h2>
+      <p>Booking assistance is planned for a future Travel-Genie update. For now, open the provider's website or Google Maps to check details and make arrangements directly.</p>
+      <button type="button" class="go offline-close" id="offline-close">Got it</button>
+    </div>
+  </dialog>
+  <script src="/static/discover.js"></script>
+</body>
+</html>
