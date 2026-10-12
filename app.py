@@ -14,6 +14,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 import settings
 from models import PlanResponse, TripRequest
 from services.planner import build_plan
+from services.discovery import DiscoveryError, search_places
 
 BASE_DIR = Path(__file__).parent
 
@@ -138,7 +139,27 @@ async def plan(trip: TripRequest):
     return await build_plan(trip)
 
 
+@app.get("/api/discover")
+async def discover(destination: str = "", category: str = "tourist attractions"):
+    """Return live SerpApi Google Maps results for the discovery page."""
+    destination = destination.strip()
+    if not destination or len(destination) > 100:
+        return _error(422, "invalid_destination", "Enter a destination (up to 100 characters).")
+    if len(category) > 80:
+        return _error(422, "invalid_category", "Choose a shorter search category.")
+    try:
+        return await search_places(destination, category)
+    except DiscoveryError as exc:
+        log.warning("SerpApi discovery unavailable: %s", str(exc))
+        return _error(503, "discovery_unavailable", str(exc))
+
+
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
+
+
+@app.get("/discover", include_in_schema=False)
+async def discover_page():
+    return FileResponse(BASE_DIR / "static" / "discover.html")
 
 
 @app.get("/", include_in_schema=False)
