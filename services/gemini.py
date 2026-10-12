@@ -17,8 +17,8 @@ from models import TripRequest
 log = logging.getLogger("travel_genie.gemini")
 
 API_URL = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
-TIMEOUT_SECONDS = 60.0
-MAX_OUTPUT_TOKENS = 16384
+TIMEOUT_SECONDS = settings.gemini_timeout_seconds()
+MAX_OUTPUT_TOKENS = settings.gemini_max_output_tokens()
 
 # Failures grouped for the UI and logs:
 #   not_configured   no API key
