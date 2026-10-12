@@ -8,6 +8,8 @@ An AI travel planner prototype. Enter your trip details and get a day-by-day iti
 - Day-by-day itinerary with morning, afternoon and evening plans, meal ideas, transport, areas to stay, tips and caveats.
 - Budget breakdown (transport, accommodation, food, activities, miscellaneous). The **backend** calculates the total, the difference from your budget, and adjustment suggestions when you're over.
 - Optional live research through SerpApi (Google Search and Google Maps), shown as source links.
+- Separate Explore page with India-wide Google Maps search results in responsive cards for attractions, hotels, restaurants, cafes, history, nature, markets and family activities.
+- Discovery cards link to the provider website or Google Maps. Each has a Book button that clearly says the agent is offline; no booking is attempted.
 - Gemini 3.8 Flash is the primary itinerary generator; Groq is the optional backup when Gemini fails or returns unusable output.
 - Deterministic fallback planner when no AI provider succeeds, with clear on-screen labels for AI, live research and demo data.
 - Nothing is booked, no database, no accounts.
@@ -15,10 +17,11 @@ An AI travel planner prototype. Enter your trip details and get a day-by-day iti
 ## Architecture
 
 ```
-Browser (static/index.html, styles.css, app.js)
-   |  POST /api/plan, GET /api/health
+Browser (static/index.html, discover.html, styles.css, app.js, discover.js)
+   |  POST /api/plan, GET /api/health, GET /api/discover
 FastAPI (app.py)  ->  services/planner.py   (workflow, budget math, fallback planner)
-                         |-- services/travel_research.py  (SerpApi, optional, max 3 requests)
+                         |-- services/travel_research.py  (SerpApi research for itinerary)
+                         |-- services/discovery.py        (SerpApi Google Maps results for Explore page)
                          |-- services/gemini.py           (primary Gemini REST API)
                          |-- services/groq.py             (backup Groq REST API)
 models.py (request validation and response schema), settings.py (.env)
@@ -124,7 +127,7 @@ Supported currencies: INR, USD, EUR, GBP, AED, SGD, THB.
 - All prices are estimates. Rule-of-thumb rates are fixed in INR and converted to other currencies with rough static rates, not live exchange rates.
 - The demo planner has curated suggestions for Goa only. Other destinations use generic templates.
 - Nothing is verified live: opening hours, availability and prices must be checked with providers.
-- No flight, hotel or activity search, bookings, payments, accounts or saved trips.
+- Explore page provides live place/hotel/restaurant search results; booking, payments, accounts and saved trips are not implemented. The Book button only displays an offline notice.
 - No distance or travel-time calculation. Transport cost for the main journey is a flat estimate per traveler.
 - Trips are limited to 14 days.
 - AI providers and SerpApi are called once per request; there is no caching or automatic retry. Groq is a fallback provider, not a replacement for SerpApi research.
