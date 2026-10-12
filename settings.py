@@ -1,9 +1,17 @@
 """Environment-based configuration. Keys are read at call time so tests can override them."""
 import os
+from pathlib import Path
 
 from dotenv import load_dotenv
 
-load_dotenv()  # loads .env if present; real environment variables take precedence
+ENV_PATH = Path(__file__).resolve().parent / ".env"
+# Load .env from the project folder (not the current working directory).
+# override=True so a blank GEMINI_API_KEY already set in your shell can't hide the file's value.
+load_dotenv(ENV_PATH, override=True)
+
+
+def env_file_found() -> bool:
+    return ENV_PATH.is_file()
 
 DEFAULT_GEMINI_MODEL = "gemini-2.5-flash"
 

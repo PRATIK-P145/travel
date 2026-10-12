@@ -13,7 +13,7 @@ from services import gemini, travel_research
 from services.gemini import GeminiError
 from services.travel_research import ResearchError
 
-log = logging.getLogger("travel_genie")
+log = logging.getLogger("travel_genie.planner")
 
 CATEGORIES = [
     ("transportation", "Transportation"),
@@ -458,6 +458,7 @@ async def build_plan(trip: TripRequest) -> PlanResponse:
                 warnings.append("Live search ran but returned no usable results.")
         except ResearchError as e:
             research_source = "unavailable"
+            log.warning("Research failed: %s", e)
             warnings.append(f"Live research was unavailable: {e}")
         except Exception:  # never let research break a plan
             log.exception("Unexpected research failure")
@@ -466,23 +467,37 @@ async def build_plan(trip: TripRequest) -> PlanResponse:
     else:
         warnings.append("No live research was performed because SERPAPI_API_KEY is not set.")
 
-    # 2. AI itinerary, or fallback
+    # 2. AI itinerary, or fallback. Every path sets ai_status so the fallback is never silent.
     plan, itinerary_source, model = fb, "fallback", None
+    ai_status, ai_error = "not_configured", None
     if settings.gemini_key():
         try:
             raw = await gemini.generate_itinerary(trip, context)
             plan, notes = normalize_ai_plan(raw, trip, fb)
             warnings += notes
-            itinerary_source, model = "gemini", settings.gemini_model()
+            itinerary_source, model, ai_status = "gemini", settings.gemini_model(), "ok"
         except GeminiError as e:
-            warnings.append(f"The AI itinerary failed ({e}) so a demo itinerary is shown instead.")
-        except (ValueError, TypeError, KeyError, AttributeError):
-            warnings.append("The AI response was incomplete, so a demo itinerary is shown instead.")
-        except Exception:
-            log.exception("Unexpected AI failure")
-            warnings.append("The AI step failed unexpectedly, so a demo itinerary is shown instead.")
+            ai_status, ai_error = e.category, str(e)  # message is already redacted and has no key
+            warnings.append(f"Gemini was not used: {ai_error}. A demo itinerary is shown instead.")
+        except (ValueError, TypeError, KeyError, AttributeError) as e:
+            ai_status, ai_error = "invalid_response", "Gemini answered, but the itinerary JSON was missing required parts"
+            log.warning("Gemini response could not be used: %s: %s", type(e).__name__, gemini.redact(e))
+            warnings.append(f"Gemini was not used: {ai_error}. A demo itinerary is shown instead.")
+        except Exception as e:
+            ai_status, ai_error = "request_failed", "Unexpected error while calling Gemini"
+            log.exception("Unexpected Gemini failure (%s)", type(e).__name__)
+            warnings.append(f"Gemini was not used: {ai_error}. A demo itinerary is shown instead.")
     else:
+        ai_error = "GEMINI_API_KEY is not set"
         warnings.append("GEMINI_API_KEY is not set, so this is a demo itinerary built from templates.")
+
+    # One greppable diagnostic line per plan: ITINERARY_SOURCE=gemini or ITINERARY_SOURCE=fallback.
+    if itinerary_source == "gemini":
+        log.info("ITINERARY_SOURCE=gemini model=%s research=%s", model, research_source)
+    else:
+        level = logging.INFO if ai_status == "not_configured" else logging.WARNING
+        log.log(level, "ITINERARY_SOURCE=fallback (DEMO MODE) reason=%s model=%s research=%s error=%s",
+                ai_status, settings.gemini_model(), research_source, ai_error or "-")
 
     if itinerary_source == "fallback" and sources:
         warnings.append("The research links below are live Google results, but the demo itinerary does not use them.")
@@ -514,6 +529,8 @@ async def build_plan(trip: TripRequest) -> PlanResponse:
             "itinerary_source": itinerary_source,
             "research_source": research_source,
             "model": model,
+            "ai_status": ai_status,
+            "ai_error": None if ai_status in ("ok", "not_configured") else ai_error,
             "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
             "verified": False,
             "warnings": warnings,

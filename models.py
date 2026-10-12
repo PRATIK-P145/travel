@@ -141,6 +141,10 @@ class Meta(BaseModel):
     itinerary_source: Literal["gemini", "fallback"]
     research_source: Literal["serpapi", "unavailable", "not_configured"]
     model: Optional[str] = None
+    # Why the itinerary is (or isn't) from Gemini:
+    #   ok, not_configured (no key), request_failed (HTTP/timeout/network), invalid_response (unusable answer)
+    ai_status: Literal["ok", "not_configured", "request_failed", "invalid_response"] = "not_configured"
+    ai_error: Optional[str] = None  # redacted, user-safe reason when ai_status is a failure
     generated_at: str
     verified: bool = False
     warnings: list[str] = Field(default_factory=list)

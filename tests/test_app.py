@@ -1,6 +1,7 @@
 """Travel-Genie tests. All external services are mocked: no API keys or network needed."""
 import asyncio
 import json
+import logging
 from datetime import date, timedelta
 
 import httpx
@@ -283,7 +284,7 @@ def test_unusable_ai_payload_falls_back(client, monkeypatch, bad):
 
 
 # ------------------------------------------------------------------ external failures
-@pytest.mark.parametrize("kind", ["rate_limit", "timeout", "network", "malformed", "auth"])
+@pytest.mark.parametrize("kind", ["rate_limit", "timeout", "network", "malformed", "invalid_key"])
 def test_gemini_failure_falls_back_with_warning(client, monkeypatch, kind):
     monkeypatch.setenv("GEMINI_API_KEY", "k")
 
@@ -401,8 +402,8 @@ def test_gemini_sends_key_in_header_not_url(monkeypatch):
     "response, kind",
     [
         (httpx.Response(429, json={}), "rate_limit"),
-        (httpx.Response(403, json={}), "auth"),
-        (httpx.Response(500, json={}), "http"),
+        (httpx.Response(403, json={}), "permission"),
+        (httpx.Response(500, json={}), "server"),
         (gemini_reply("this is not json"), "malformed"),
         (gemini_reply(""), "empty"),
         (httpx.Response(200, json={"candidates": []}), "empty"),
@@ -513,3 +514,222 @@ def test_requested_nightlife_appears_in_evenings():
     plan = planner.fallback_plan(trip(duration_days=5, interests=["food", "nightlife"]))
     titles = {e[0] for e in planner.GOA_POOL["nightlife"]}
     assert any(d["evening"]["title"] in titles for d in plan["days"])
+
+
+# ====================================================================== Gemini diagnostics
+SECRET = "AIzaSyFAKE_secret_key_1234567890abcdef"
+
+
+def google_error(status, google_status, message):
+    return httpx.Response(status, json={"error": {"code": status, "message": message, "status": google_status}})
+
+
+@pytest.fixture
+def secret_key(monkeypatch):
+    monkeypatch.setenv("GEMINI_API_KEY", SECRET)
+
+
+def call_gemini(handler):
+    return asyncio.run(gemini.generate_itinerary(trip(), "", client=_gemini_client(handler)))
+
+
+# ---- 1. missing key vs failed request vs invalid response are distinct
+def test_missing_key_is_not_configured_and_logged(caplog):
+    caplog.set_level(logging.INFO, logger="travel_genie")
+    with pytest.raises(GeminiError) as exc:
+        asyncio.run(gemini.generate_itinerary(trip(), ""))
+    assert exc.value.kind == "not_configured" and exc.value.category == "not_configured"
+    assert "GEMINI_API_KEY is not set" in str(exc.value)
+    assert "kind=not_configured" in caplog.text
+
+
+def test_missing_key_plan_reports_not_configured_and_logs_demo_mode(client, caplog):
+    caplog.set_level(logging.INFO, logger="travel_genie")
+    meta = client.post("/api/plan", json=payload()).json()["meta"]
+    assert meta["ai_status"] == "not_configured" and meta["itinerary_source"] == "fallback"
+    assert "ITINERARY_SOURCE=fallback (DEMO MODE) reason=not_configured" in caplog.text
+
+
+# ---- 2. non-200 responses: status + redacted Google message logged, key never leaked
+@pytest.mark.parametrize(
+    "status, google_status, message, kind",
+    [
+        (400, "INVALID_ARGUMENT", "API key not valid. Please pass a valid API key.", "invalid_key"),
+        (401, "UNAUTHENTICATED", "Request had invalid authentication credentials.", "invalid_key"),
+        (403, "PERMISSION_DENIED", "Generative Language API has not been used in project 123 before or it is disabled.", "permission"),
+        (404, "NOT_FOUND", "models/gemini-9-ultra is not found for API version v1beta", "model_not_found"),
+        (429, "RESOURCE_EXHAUSTED", "You exceeded your current quota.", "rate_limit"),
+        (500, "INTERNAL", "An internal error has occurred.", "server"),
+        (503, "UNAVAILABLE", "The model is overloaded.", "server"),
+        (400, "INVALID_ARGUMENT", "Unsupported generation config.", "bad_request"),
+    ],
+)
+def test_non_200_logs_status_and_google_message(secret_key, caplog, status, google_status, message, kind):
+    caplog.set_level(logging.INFO, logger="travel_genie")
+    with pytest.raises(GeminiError) as exc:
+        call_gemini(lambda req: google_error(status, google_status, message))
+    e = exc.value
+    assert e.kind == kind and e.category == "request_failed" and e.status_code == status
+    assert f"HTTP {status}" in str(e)
+    assert f"http_status={status}" in caplog.text and f"kind={kind}" in caplog.text
+    assert message[:25] in caplog.text  # Google's message is logged (redacted), not swallowed
+
+
+def test_unsupported_model_message_names_the_model(secret_key, monkeypatch):
+    monkeypatch.setenv("GEMINI_MODEL", "gemini-9-ultra")
+    with pytest.raises(GeminiError) as exc:
+        call_gemini(lambda req: google_error(404, "NOT_FOUND", "models/gemini-9-ultra is not found"))
+    assert "gemini-9-ultra" in str(exc.value) and "GEMINI_MODEL" in str(exc.value)
+
+
+def test_secret_never_appears_in_logs_errors_or_responses(secret_key, caplog, client, monkeypatch):
+    caplog.set_level(logging.DEBUG, logger="travel_genie")
+    leaky = f"API key not valid: {SECRET}. See https://x.test/?key={SECRET}&a=1"
+    with pytest.raises(GeminiError) as exc:
+        call_gemini(lambda req: google_error(400, "INVALID_ARGUMENT", leaky))
+    assert SECRET not in str(exc.value) and SECRET not in exc.value.detail and SECRET not in caplog.text
+    assert "[REDACTED]" in caplog.text
+
+    # same leaky failure end to end: nothing in the API response or logs
+    async def leaky_call(trip, ctx=""):
+        raise gemini._fail("invalid_key", f"bad key {SECRET}", 400, leaky)
+
+    monkeypatch.setattr(gemini, "generate_itinerary", leaky_call)
+    r = client.post("/api/plan", json=payload())
+    assert SECRET not in r.text and SECRET not in caplog.text
+
+
+def test_redact_helper(monkeypatch):
+    monkeypatch.setenv("GEMINI_API_KEY", "customkey-not-aiza-format")
+    out = gemini.redact("x customkey-not-aiza-format y AIzaSyABCDEFGHIJKLMNOPQRSTUV z ?key=abc123&q=1 api_key=zzz")
+    assert "customkey" not in out and "AIzaSy" not in out and "abc123" not in out and "zzz" not in out
+    assert len(gemini.redact("a" * 1000)) <= 300
+
+
+def test_non_json_error_body_does_not_crash(secret_key):
+    with pytest.raises(GeminiError) as exc:
+        call_gemini(lambda req: httpx.Response(502, content=b"<html>Bad gateway</html>"))
+    assert exc.value.kind == "server" and exc.value.status_code == 502
+
+
+def test_failed_request_plan_surfaces_explicit_fallback(client, secret_key, caplog, monkeypatch):
+    caplog.set_level(logging.INFO, logger="travel_genie")
+
+    async def real_call(trip, ctx=""):
+        return await _orig_generate(trip, ctx, client=_gemini_client(lambda req: google_error(429, "RESOURCE_EXHAUSTED", "quota")))
+
+    monkeypatch.setattr(gemini, "generate_itinerary", real_call)
+    body = client.post("/api/plan", json=payload()).json()
+    meta = body["meta"]
+    assert meta["itinerary_source"] == "fallback" and meta["model"] is None
+    assert meta["ai_status"] == "request_failed" and "HTTP 429" in meta["ai_error"]
+    assert any("Gemini was not used" in w for w in meta["warnings"])
+    assert "ITINERARY_SOURCE=fallback (DEMO MODE) reason=request_failed" in caplog.text
+    assert len(body["days"]) == 3
+
+
+_orig_generate = gemini.generate_itinerary
+
+
+# ---- 3. timeouts and network errors
+def test_timeout_is_logged_and_classified(secret_key, caplog):
+    caplog.set_level(logging.INFO, logger="travel_genie")
+
+    def timeout(req):
+        raise httpx.ReadTimeout("slow")
+
+    with pytest.raises(GeminiError) as exc:
+        call_gemini(timeout)
+    assert exc.value.kind == "timeout" and exc.value.category == "request_failed"
+    assert "kind=timeout" in caplog.text and "ReadTimeout" in caplog.text
+
+
+def test_network_error_is_logged_and_classified(secret_key, caplog):
+    caplog.set_level(logging.INFO, logger="travel_genie")
+
+    def down(req):
+        raise httpx.ConnectError("name resolution failed")
+
+    with pytest.raises(GeminiError) as exc:
+        call_gemini(down)
+    assert exc.value.kind == "network" and "kind=network" in caplog.text
+
+
+# ---- 4. invalid model responses (HTTP 200 but unusable)
+def test_truncated_answer_is_reported_as_truncated(secret_key, caplog):
+    caplog.set_level(logging.INFO, logger="travel_genie")
+    resp = httpx.Response(200, json={"candidates": [{"finishReason": "MAX_TOKENS", "content": {"parts": [{"text": '{"days": [{"day": 1,'}]}}]})
+    with pytest.raises(GeminiError) as exc:
+        call_gemini(lambda req: resp)
+    assert exc.value.kind == "truncated" and exc.value.category == "invalid_response"
+    assert "MAX_TOKENS" in caplog.text
+
+
+def test_malformed_json_is_invalid_response_and_plan_says_so(client, secret_key, caplog, monkeypatch):
+    caplog.set_level(logging.INFO, logger="travel_genie")
+
+    async def real_call(trip, ctx=""):
+        return await _orig_generate(trip, ctx, client=_gemini_client(lambda req: gemini_reply("Sure! Here is your trip: lots of prose")))
+
+    monkeypatch.setattr(gemini, "generate_itinerary", real_call)
+    meta = client.post("/api/plan", json=payload()).json()["meta"]
+    assert meta["ai_status"] == "invalid_response" and meta["itinerary_source"] == "fallback"
+    assert "reason=invalid_response" in caplog.text
+
+
+def test_valid_json_with_wrong_shape_is_invalid_response(client, secret_key, caplog, monkeypatch):
+    caplog.set_level(logging.INFO, logger="travel_genie")
+
+    async def fake(trip, ctx=""):
+        return {"days": "not a list"}
+
+    monkeypatch.setattr(gemini, "generate_itinerary", fake)
+    meta = client.post("/api/plan", json=payload()).json()["meta"]
+    assert meta["ai_status"] == "invalid_response" and meta["ai_error"]
+    assert "Gemini response could not be used" in caplog.text
+
+
+# ---- 5. success path
+def test_successful_generation_is_logged_and_marked_ok(client, secret_key, caplog, monkeypatch):
+    caplog.set_level(logging.INFO, logger="travel_genie")
+
+    async def real_call(trip, ctx=""):
+        return await _orig_generate(trip, ctx, client=_gemini_client(lambda req: gemini_reply(json.dumps(good_ai_plan()))))
+
+    monkeypatch.setattr(gemini, "generate_itinerary", real_call)
+    body = client.post("/api/plan", json=payload()).json()
+    meta = body["meta"]
+    assert meta["itinerary_source"] == "gemini" and meta["ai_status"] == "ok" and meta["ai_error"] is None
+    assert body["days"][0]["morning"]["title"] == "AI morning"
+    assert "Gemini request succeeded" in caplog.text and "http_status=200" in caplog.text
+    assert "ITINERARY_SOURCE=gemini" in caplog.text and "DEMO MODE" not in caplog.text
+    assert SECRET not in caplog.text and SECRET not in json.dumps(body)
+
+
+def test_request_uses_env_model_and_disables_thinking_only_for_25_flash(secret_key, monkeypatch):
+    seen = []
+
+    def handler(req):
+        seen.append((str(req.url), json.loads(req.content)["generationConfig"]))
+        return gemini_reply("{}")
+
+    call_gemini(handler)
+    monkeypatch.setenv("GEMINI_MODEL", "gemini-2.0-flash")
+    call_gemini(handler)
+    assert "gemini-2.5-flash:generateContent" in seen[0][0] and seen[0][1]["thinkingConfig"] == {"thinkingBudget": 0}
+    assert "gemini-2.0-flash:generateContent" in seen[1][0] and "thinkingConfig" not in seen[1][1]
+
+
+# ---- 6. startup diagnostics
+def test_startup_logs_config_status_without_secrets(secret_key, caplog):
+    caplog.set_level(logging.INFO, logger="travel_genie")
+    with TestClient(app_module.app):
+        pass
+    assert "GEMINI_API_KEY_set=True" in caplog.text and SECRET not in caplog.text
+
+
+def test_startup_warns_when_key_missing(caplog):
+    caplog.set_level(logging.INFO, logger="travel_genie")
+    with TestClient(app_module.app):
+        pass
+    assert "GEMINI_API_KEY_set=False" in caplog.text and "DEMO MODE" in caplog.text

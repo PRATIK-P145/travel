@@ -1,5 +1,8 @@
 """Travel-Genie FastAPI application. Run with: uvicorn app:app --reload"""
+# Travel Genie
 import logging
+import os
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, Request
@@ -13,9 +16,38 @@ from models import PlanResponse, TripRequest
 from services.planner import build_plan
 
 BASE_DIR = Path(__file__).parent
-log = logging.getLogger("travel_genie")
 
-app = FastAPI(title="Travel-Genie", version="1.0.0")
+
+def setup_logging() -> None:
+    """Send travel_genie.* logs to the console (uvicorn only configures its own loggers).
+
+    Set LOG_LEVEL=DEBUG|INFO|WARNING in .env to change verbosity. Default: INFO.
+    """
+    logger = logging.getLogger("travel_genie")
+    logger.setLevel(getattr(logging, os.getenv("LOG_LEVEL", "INFO").upper(), logging.INFO))
+    if not logger.handlers:
+        handler = logging.StreamHandler()
+        handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s [%(name)s] %(message)s"))
+        logger.addHandler(handler)
+
+
+setup_logging()
+log = logging.getLogger("travel_genie.app")
+
+
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    # Booleans and the model name only; keys are never logged.
+    log.info(
+        "Startup: env_file_found=%s GEMINI_API_KEY_set=%s GEMINI_MODEL=%s SERPAPI_API_KEY_set=%s",
+        settings.env_file_found(), bool(settings.gemini_key()), settings.gemini_model(), bool(settings.serpapi_key()),
+    )
+    if not settings.gemini_key():
+        log.warning("GEMINI_API_KEY is not set: itineraries will come from DEMO MODE templates.")
+    yield
+
+
+app = FastAPI(title="Travel-Genie", version="1.0.0", lifespan=lifespan)
 
 FIELD_LABELS = {
     "start_city": "Starting city",
@@ -91,6 +123,7 @@ async def health():
     return {
         "status": "ok",
         "mode": "live" if gemini_ok else "demo",
+        "env_file_found": settings.env_file_found(),
         "integrations": {
             "gemini": {"configured": gemini_ok, "model": settings.gemini_model()},
             "serpapi": {"configured": serp_ok},
