@@ -9,8 +9,9 @@ from typing import Any, Optional
 
 import settings
 from models import PlanResponse, TripRequest
-from services import gemini, travel_research
+from services import gemini, groq, travel_research
 from services.gemini import GeminiError
+from services.groq import GroqError
 from services.travel_research import ResearchError
 
 log = logging.getLogger("travel_genie.planner")
@@ -443,6 +444,13 @@ def normalize_ai_plan(raw: Any, trip: TripRequest, fb: dict) -> tuple[dict, list
 
 
 # --------------------------------------------------------------------------- orchestration
+def redact_provider_error(provider_name: str, error: Exception) -> str:
+    """Redact exception details before logging them."""
+    if provider_name == "groq":
+        return groq.redact(error)
+    return gemini.redact(error)
+
+
 async def build_plan(trip: TripRequest) -> PlanResponse:
     warnings: list[str] = []
     fb = fallback_plan(trip)
@@ -467,33 +475,46 @@ async def build_plan(trip: TripRequest) -> PlanResponse:
     else:
         warnings.append("No live research was performed because SERPAPI_API_KEY is not set.")
 
-    # 2. AI itinerary, or fallback. Every path sets ai_status so the fallback is never silent.
+    # 2. Try Gemini first, then Groq, then the deterministic demo fallback.
     plan, itinerary_source, model = fb, "fallback", None
     ai_status, ai_error = "not_configured", None
+    providers = []
     if settings.gemini_key():
-        try:
-            raw = await gemini.generate_itinerary(trip, context)
-            plan, notes = normalize_ai_plan(raw, trip, fb)
-            warnings += notes
-            itinerary_source, model, ai_status = "gemini", settings.gemini_model(), "ok"
-        except GeminiError as e:
-            ai_status, ai_error = e.category, str(e)  # message is already redacted and has no key
-            warnings.append(f"Gemini was not used: {ai_error}. A demo itinerary is shown instead.")
-        except (ValueError, TypeError, KeyError, AttributeError) as e:
-            ai_status, ai_error = "invalid_response", "Gemini answered, but the itinerary JSON was missing required parts"
-            log.warning("Gemini response could not be used: %s: %s", type(e).__name__, gemini.redact(e))
-            warnings.append(f"Gemini was not used: {ai_error}. A demo itinerary is shown instead.")
-        except Exception as e:
-            ai_status, ai_error = "request_failed", "Unexpected error while calling Gemini"
-            log.exception("Unexpected Gemini failure (%s)", type(e).__name__)
-            warnings.append(f"Gemini was not used: {ai_error}. A demo itinerary is shown instead.")
-    else:
-        ai_error = "GEMINI_API_KEY is not set"
-        warnings.append("GEMINI_API_KEY is not set, so this is a demo itinerary built from templates.")
+        providers.append(("gemini", settings.gemini_model(), gemini.generate_itinerary))
+    if settings.groq_key():
+        providers.append(("groq", settings.groq_model(), groq.generate_itinerary))
 
-    # One greppable diagnostic line per plan: ITINERARY_SOURCE=gemini or ITINERARY_SOURCE=fallback.
-    if itinerary_source == "gemini":
-        log.info("ITINERARY_SOURCE=gemini model=%s research=%s", model, research_source)
+    if not providers:
+        ai_error = "Neither GEMINI_API_KEY nor GROQ_API_KEY is set"
+        warnings.append("No AI provider key is configured, so this is a demo itinerary built from templates.")
+    else:
+        for provider_name, provider_model, generate in providers:
+            try:
+                raw = await generate(trip, context)
+                plan, notes = normalize_ai_plan(raw, trip, fb)
+                warnings += notes
+                itinerary_source, model, ai_status = provider_name, provider_model, "ok"
+                if provider_name == "groq":
+                    warnings.append("Gemini was unavailable or returned an unusable response; Groq generated this itinerary as the backup provider.")
+                break
+            except (GeminiError, GroqError) as e:
+                ai_status, ai_error = e.category, str(e)
+                log.warning("%s provider failed; trying next configured provider if available: %s", provider_name, ai_error)
+                warnings.append(f"{provider_name.title()} was not used: {ai_error}.")
+            except (ValueError, TypeError, KeyError, AttributeError) as e:
+                ai_status, ai_error = "invalid_response", f"{provider_name.title()} answered, but the itinerary JSON was missing required parts"
+                log.warning("%s response could not be used: %s: %s", provider_name, type(e).__name__, redact_provider_error(provider_name, e))
+                warnings.append(f"{provider_name.title()} was not used: {ai_error}.")
+            except Exception as e:
+                ai_status, ai_error = "request_failed", f"Unexpected error while calling {provider_name.title()}"
+                log.exception("Unexpected %s failure (%s)", provider_name, type(e).__name__)
+                warnings.append(f"{provider_name.title()} was not used: {ai_error}.")
+
+        if itinerary_source == "fallback":
+            warnings.append("All configured AI providers failed. A demo itinerary is shown instead.")
+
+    if itinerary_source in ("gemini", "groq"):
+        log.info("ITINERARY_SOURCE=%s model=%s research=%s", itinerary_source, model, research_source)
     else:
         level = logging.INFO if ai_status == "not_configured" else logging.WARNING
         log.log(level, "ITINERARY_SOURCE=fallback (DEMO MODE) reason=%s model=%s research=%s error=%s",
