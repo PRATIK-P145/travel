@@ -26,3 +26,26 @@ def gemini_model() -> str:
 
 def serpapi_key() -> str:
     return os.getenv("SERPAPI_API_KEY", "").strip()
+
+
+def _positive_number(name: str, default: float, minimum: float, maximum: float) -> float:
+    """Read a bounded positive numeric setting, falling back safely on bad input."""
+    try:
+        value = float(os.getenv(name, str(default)).strip())
+    except (TypeError, ValueError):
+        return default
+    return value if minimum <= value <= maximum else default
+
+
+def gemini_timeout_seconds() -> float:
+    """HTTP timeout for Gemini, configurable from .env (10–120 seconds)."""
+    return _positive_number("GEMINI_TIMEOUT_SECONDS", 35.0, 10.0, 120.0)
+
+
+def gemini_max_output_tokens() -> int:
+    """Output token cap for Gemini, configurable from .env (1024–8192 tokens)."""
+    try:
+        value = int(os.getenv("GEMINI_MAX_OUTPUT_TOKENS", "8192").strip())
+    except (TypeError, ValueError):
+        return 8192
+    return value if 1024 <= value <= 8192 else 8192
