@@ -87,7 +87,7 @@ async def generate_itinerary(trip: TripRequest, research_context: str = "", clie
             {"role": "user", "content": build_prompt(trip, research_context)},
         ],
         "temperature": 0.7,
-        "max_tokens": settings.groq_max_output_tokens(),
+        "max_completion_tokens": settings.groq_max_output_tokens(),
         "response_format": {"type": "json_object"},
     }
     headers = {"Authorization": f"Bearer {key}", "Content-Type": "application/json"}
