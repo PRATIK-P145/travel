@@ -53,7 +53,7 @@ Edit `.env`. Both keys are optional.
 | `GEMINI_TIMEOUT_SECONDS` | Per-request timeout in seconds (10–120; invalid values use the default) | `35` |
 | `GEMINI_MAX_OUTPUT_TOKENS` | Maximum generated output tokens (1024–8192; invalid values use the default) | `8192` |
 | `GROQ_API_KEY` | Enables Groq backup if Gemini fails | empty (backup disabled) |
-| `GROQ_MODEL` | Groq model name | `llama-3.3-70b-versatile` |
+| `GROQ_MODEL` | Groq model name | `openai/gpt-oss-120b` |
 | `GROQ_TIMEOUT_SECONDS` | Per-request timeout in seconds (10–120) | `35` |
 | `GROQ_MAX_OUTPUT_TOKENS` | Maximum generated output tokens (1024–16384) | `8192` |
 | `SERPAPI_API_KEY` | Enables live Google Search and Maps research | empty (no research) |
