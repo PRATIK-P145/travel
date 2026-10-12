@@ -1,6 +1,6 @@
 """Workflow: validate -> research -> AI itinerary -> normalize -> budget -> result.
 
-Also holds the deterministic fallback planner used when Gemini is unavailable.
+Also holds the deterministic fallback planner used when configured AI providers are unavailable.
 """
 import logging
 import math
@@ -495,7 +495,10 @@ async def build_plan(trip: TripRequest) -> PlanResponse:
                 warnings += notes
                 itinerary_source, model, ai_status = provider_name, provider_model, "ok"
                 if provider_name == "groq":
-                    warnings.append("Gemini was unavailable or returned an unusable response; Groq generated this itinerary as the backup provider.")
+                    if settings.gemini_key():
+                        warnings.append("Gemini was unavailable or returned an unusable response; Groq generated this itinerary as the backup provider.")
+                    else:
+                        warnings.append("Gemini is not configured; Groq generated this itinerary as the configured AI provider.")
                 break
             except (GeminiError, GroqError) as e:
                 ai_status, ai_error = e.category, str(e)
