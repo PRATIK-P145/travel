@@ -28,3 +28,19 @@ def test_groq_error_redacts_configured_key(monkeypatch):
     safe = groq.redact(f"provider returned {fake_key}")
     assert fake_key not in safe
     assert "[REDACTED]" in safe
+
+
+
+def test_meta_accepts_groq_as_itinerary_source():
+    from models import Meta
+
+    meta = Meta(
+        itinerary_source="groq",
+        research_source="not_configured",
+        model="openai/gpt-oss-120b",
+        ai_status="ok",
+        generated_at="2026-10-12T09:28:09Z",
+        disclaimer="Estimates only.",
+    )
+    assert meta.itinerary_source == "groq"
+    assert meta.model == "openai/gpt-oss-120b"
