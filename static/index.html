@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Travel-Genie: plan a trip with a budget you can check</title>
+  <meta name="description" content="Tell Travel-Genie where you're headed and get a day-by-day plan with an estimated budget.">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%A7%9E%3C/text%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Figtree:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+  <a class="skip" href="#plan-form">Skip to the planner</a>
+
+  <header class="top">
+    <div class="wrap top-row">
+      <span class="brand">Travel-Genie</span>
+      <span id="mode-pill" class="mode-pill" role="status">Checking setup…</span>
+    </div>
+  </header>
+
+  <main>
+    <section class="hero wrap">
+      <h1>Tell us where you're headed. Get a plan you can check against your budget.</h1>
+      <p class="lede">Fill in the boarding pass below. Travel-Genie returns a day-by-day itinerary, a budget breakdown and research links in under a minute.</p>
+    </section>
+
+    <section class="wrap">
+      <form id="plan-form" class="pass" novalidate>
+        <div class="pass-main">
+          <div class="route">
+            <div class="field route-field">
+              <label for="start_city">From</label>
+              <input id="start_city" name="start_city" value="Pune" autocomplete="off" required maxlength="80">
+            </div>
+            <svg class="route-line" viewBox="0 0 160 40" aria-hidden="true" focusable="false">
+              <path d="M4 30 Q80 -14 156 30" fill="none" stroke="currentColor" stroke-width="2" stroke-dasharray="3 6" stroke-linecap="round"/>
+              <path d="M146 20l12 10-14 3 2-6z" fill="currentColor"/>
+            </svg>
+            <div class="field route-field">
+              <label for="destination">To</label>
+              <input id="destination" name="destination" value="Goa" autocomplete="off" required maxlength="80">
+            </div>
+          </div>
+
+          <div class="grid">
+            <div class="field">
+              <label for="departure_date">Departure date</label>
+              <input id="departure_date" name="departure_date" type="date" required>
+            </div>
+            <div class="field">
+              <label for="return_date">Return date <span class="opt">(optional)</span></label>
+              <input id="return_date" name="return_date" type="date">
+            </div>
+            <div class="field">
+              <label for="duration_days">Duration in days</label>
+              <input id="duration_days" name="duration_days" type="number" min="1" max="14" value="3" inputmode="numeric">
+              <small id="duration-hint" class="hint">Used when no return date is set.</small>
+            </div>
+            <div class="field">
+              <label for="travelers">Travelers</label>
+              <input id="travelers" name="travelers" type="number" min="1" max="20" value="2" inputmode="numeric" required>
+            </div>
+          </div>
+
+          <fieldset class="field">
+            <legend>Travel style</legend>
+            <div class="segmented">
+              <label><input type="radio" name="travel_style" value="budget"><span>Budget</span></label>
+              <label><input type="radio" name="travel_style" value="balanced" checked><span>Balanced</span></label>
+              <label><input type="radio" name="travel_style" value="luxury"><span>Luxury</span></label>
+            </div>
+          </fieldset>
+
+          <fieldset class="field">
+            <legend>Interests</legend>
+            <div class="chips" id="interests">
+              <label><input type="checkbox" name="interests" value="food" checked><span>Food</span></label>
+              <label><input type="checkbox" name="interests" value="nature"><span>Nature</span></label>
+              <label><input type="checkbox" name="interests" value="adventure"><span>Adventure</span></label>
+              <label><input type="checkbox" name="interests" value="history"><span>History</span></label>
+              <label><input type="checkbox" name="interests" value="beaches" checked><span>Beaches</span></label>
+              <label><input type="checkbox" name="interests" value="shopping"><span>Shopping</span></label>
+              <label><input type="checkbox" name="interests" value="culture"><span>Culture</span></label>
+              <label><input type="checkbox" name="interests" value="nightlife"><span>Nightlife</span></label>
+            </div>
+          </fieldset>
+
+          <div class="grid two">
+            <div class="field">
+              <label for="accommodation">Accommodation preference <span class="opt">(optional)</span></label>
+              <input id="accommodation" name="accommodation" placeholder="e.g. beach guesthouse, hostel, 4-star hotel" maxlength="100">
+            </div>
+            <div class="field">
+              <label for="notes">Anything else? <span class="opt">(optional)</span></label>
+              <input id="notes" name="notes" placeholder="e.g. vegetarian, travelling with a toddler" maxlength="1000">
+            </div>
+          </div>
+        </div>
+
+        <div class="pass-stub">
+          <div class="field">
+            <label for="budget">Total budget</label>
+            <input id="budget" name="budget" type="number" min="1" step="any" value="25000" inputmode="decimal" required>
+          </div>
+          <div class="field">
+            <label for="currency">Currency</label>
+            <select id="currency" name="currency">
+              <option value="INR" selected>INR (₹)</option>
+              <option value="USD">USD ($)</option>
+              <option value="EUR">EUR (€)</option>
+              <option value="GBP">GBP (£)</option>
+              <option value="AED">AED</option>
+              <option value="SGD">SGD</option>
+              <option value="THB">THB</option>
+            </select>
+          </div>
+          <button type="submit" id="submit-btn" class="go">Plan my trip</button>
+          <p class="stub-note">Nothing is booked. Costs are estimates.</p>
+        </div>
+      </form>
+    </section>
+
+    <section id="results" class="wrap results" aria-live="polite" tabindex="-1"></section>
+  </main>
+
+  <footer class="wrap foot">
+    <p>Travel-Genie is a prototype. Check prices, opening hours and availability with providers before you book.</p>
+  </footer>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
