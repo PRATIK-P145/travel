@@ -42,7 +42,7 @@ def test_groq_settings_defaults_and_overrides(monkeypatch):
     monkeypatch.delenv("GROQ_MODEL", raising=False)
     monkeypatch.delenv("GROQ_TIMEOUT_SECONDS", raising=False)
     monkeypatch.delenv("GROQ_MAX_OUTPUT_TOKENS", raising=False)
-    assert settings.groq_model() == "llama-3.3-70b-versatile"
+    assert settings.groq_model() == "openai/gpt-oss-120b"
     assert settings.groq_timeout_seconds() == 35.0
     assert settings.groq_max_output_tokens() == 8192
 
