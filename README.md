@@ -8,8 +8,8 @@ An AI travel planner prototype. Enter your trip details and get a day-by-day iti
 - Day-by-day itinerary with morning, afternoon and evening plans, meal ideas, transport, areas to stay, tips and caveats.
 - Budget breakdown (transport, accommodation, food, activities, miscellaneous). The **backend** calculates the total, the difference from your budget, and adjustment suggestions when you're over.
 - Optional live research through SerpApi (Google Search and Google Maps), shown as source links.
-- Gemini generates the itinerary as structured JSON, which is validated and normalized before display.
-- Deterministic fallback planner when keys are missing or a service fails, with clear on-screen labels for what is AI, what is live research and what is demo data.
+- Gemini 3.8 Flash is the primary itinerary generator; Groq is the optional backup when Gemini fails or returns unusable output.
+- Deterministic fallback planner when no AI provider succeeds, with clear on-screen labels for AI, live research and demo data.
 - Nothing is booked, no database, no accounts.
 
 ## Architecture
@@ -19,11 +19,12 @@ Browser (static/index.html, styles.css, app.js)
    |  POST /api/plan, GET /api/health
 FastAPI (app.py)  ->  services/planner.py   (workflow, budget math, fallback planner)
                          |-- services/travel_research.py  (SerpApi, optional, max 3 requests)
-                         |-- services/gemini.py           (Gemini REST API, swappable)
+                         |-- services/gemini.py           (primary Gemini REST API)
+                         |-- services/groq.py             (backup Groq REST API)
 models.py (request validation and response schema), settings.py (.env)
 ```
 
-Workflow: validate request, research (if configured), generate itinerary (Gemini or fallback), normalize AI output, compute budget, return result.
+Workflow: validate request, research (if configured), try Gemini, then Groq if needed, then fallback, normalize AI output, compute budget, return result.
 
 Missing or malformed parts of an AI response are filled from the fallback plan, and a warning says so. The AI's own totals are ignored; the budget total is always the sum of the category lines.
 
@@ -51,9 +52,13 @@ Edit `.env`. Both keys are optional.
 | `GEMINI_MODEL` | Gemini model name | `gemini-3.8-flash` |
 | `GEMINI_TIMEOUT_SECONDS` | Per-request timeout in seconds (10–120; invalid values use the default) | `35` |
 | `GEMINI_MAX_OUTPUT_TOKENS` | Maximum generated output tokens (1024–8192; invalid values use the default) | `8192` |
+| `GROQ_API_KEY` | Enables Groq backup if Gemini fails | empty (backup disabled) |
+| `GROQ_MODEL` | Groq model name | `llama-3.3-70b-versatile` |
+| `GROQ_TIMEOUT_SECONDS` | Per-request timeout in seconds (10–120) | `35` |
+| `GROQ_MAX_OUTPUT_TOKENS` | Maximum generated output tokens (1024–16384) | `8192` |
 | `SERPAPI_API_KEY` | Enables live Google Search and Maps research | empty (no research) |
 
-Keys are never returned by the API. `.env` is git-ignored. For reliable troubleshooting, start with `GEMINI_MODEL=gemini-3.8-flash`; use a model name available to your API key. A timeout is a slow/unanswered request, not proof that the key is invalid. The app logs distinguish authentication, permission, model, quota, network, timeout and malformed-response failures.
+Keys are never returned by the API. `.env` is git-ignored. Gemini 3.8 Flash remains primary; if it fails, the planner tries Groq when `GROQ_API_KEY` is set. Create a key at [Groq Console](https://console.groq.com/keys) and add it to your local `.env`. HTTP 503 or a timeout is not proof that a key is invalid.
 
 ## Run locally
 
@@ -93,7 +98,7 @@ curl -X POST http://127.0.0.1:8000/api/plan \
   }'
 ```
 
-The response contains `trip`, `overview`, `days`, `accommodation`, `budget`, `tips`, `caveats`, `sources` and `meta`. `meta.itinerary_source` is `gemini` or `fallback`, `meta.research_source` is `serpapi`, `unavailable` or `not_configured`, and `meta.warnings` explains any fallback.
+The response contains `trip`, `overview`, `days`, `accommodation`, `budget`, `tips`, `caveats`, `sources` and `meta`. `meta.itinerary_source` is `gemini`, `groq` or `fallback`; `meta.research_source` is `serpapi`, `unavailable` or `not_configured`; and `meta.warnings` explains provider fallbacks.
 
 Errors share one shape. Validation failures return HTTP 422:
 
@@ -107,8 +112,9 @@ Supported currencies: INR, USD, EUR, GBP, AED, SGD, THB.
 
 | Situation | Result |
 | --- | --- |
-| No `GEMINI_API_KEY` | Template itinerary, labelled "demo template, not AI" |
-| Gemini error, rate limit, timeout or bad JSON | Template itinerary plus a warning explaining why |
+| Neither `GEMINI_API_KEY` nor `GROQ_API_KEY` | Template itinerary, labelled "demo template, not AI" |
+| Gemini error, rate limit, timeout or bad JSON with Groq key set | Try Groq and use its itinerary if valid |
+| All configured AI providers fail | Template itinerary plus a warning explaining why |
 | No `SERPAPI_API_KEY` | No research links, labelled "Research: not used" |
 | SerpApi failure | Plan continues, research marked unavailable |
 | Only SerpApi works | Live links are shown, with a note that the template itinerary does not use them |
@@ -121,4 +127,4 @@ Supported currencies: INR, USD, EUR, GBP, AED, SGD, THB.
 - No flight, hotel or activity search, bookings, payments, accounts or saved trips.
 - No distance or travel-time calculation. Transport cost for the main journey is a flat estimate per traveler.
 - Trips are limited to 14 days.
-- Gemini and SerpApi calls are made once per request with no caching or retries.
+- AI providers and SerpApi are called once per request; there is no caching or automatic retry. Groq is a fallback provider, not a replacement for SerpApi research.
