@@ -13,7 +13,7 @@ load_dotenv(ENV_PATH, override=True)
 def env_file_found() -> bool:
     return ENV_PATH.is_file()
 
-DEFAULT_GEMINI_MODEL = "gemini-2.5-flash"
+DEFAULT_GEMINI_MODEL = "gemini-3.8-flash"
 
 
 def gemini_key() -> str:
