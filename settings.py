@@ -28,7 +28,7 @@ def serpapi_key() -> str:
     return os.getenv("SERPAPI_API_KEY", "").strip()
 
 
-DEFAULT_GROQ_MODEL = "llama-3.3-70b-versatile"
+DEFAULT_GROQ_MODEL = "openai/gpt-oss-120b"
 
 
 def groq_key() -> str:
