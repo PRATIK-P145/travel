@@ -86,7 +86,7 @@ async def generate_itinerary(trip: TripRequest, research_context: str = "", clie
             {"role": "system", "content": "You are Travel-Genie. Follow the user request and return only valid JSON."},
             {"role": "user", "content": build_prompt(trip, research_context)},
         ],
-        "temperature": 0.7,
+        "temperature": 1.0 if model.startswith("openai/gpt-oss") else 0.7,
         "max_completion_tokens": settings.groq_max_output_tokens(),
         "response_format": {"type": "json_object"},
     }
@@ -99,6 +99,26 @@ async def generate_itinerary(trip: TripRequest, research_context: str = "", clie
     try:
         try:
             resp = await client.post(API_URL, json=body, headers=headers)
+            # Groq's constrained JSON mode can fail for otherwise valid prompts.
+            # Retry that specific failure once in ordinary chat mode; _parse_json
+            # below still enforces that the returned content is a JSON object.
+            if resp.status_code == 400:
+                try:
+                    first_payload = resp.json()
+                    first_error = first_payload.get("error", {})
+                    first_detail = str(
+                        first_error.get("message", first_error)
+                        if isinstance(first_error, dict) else first_error
+                    )
+                except (ValueError, AttributeError):
+                    first_detail = resp.text or ""
+                if "failed to generate json" in first_detail.lower():
+                    retry_body = dict(body)
+                    retry_body.pop("response_format", None)
+                    log.warning(
+                        "Groq JSON mode failed; retrying once without constrained response_format"
+                    )
+                    resp = await client.post(API_URL, json=retry_body, headers=headers)
         except httpx.TimeoutException as e:
             raise _fail("timeout", f"Groq did not answer within {int(timeout)} seconds", detail=type(e).__name__)
         except httpx.HTTPError as e:
@@ -113,6 +133,10 @@ async def generate_itinerary(trip: TripRequest, research_context: str = "", clie
             payload = resp.json()
             err = payload.get("error", {})
             detail = str(err.get("message", err) if isinstance(err, dict) else err)
+            # Include the API's failed_generation field when present; redact and
+            # truncate it in _fail before it reaches logs or response metadata.
+            if isinstance(err, dict) and err.get("failed_generation"):
+                detail += f"; failed_generation={err['failed_generation']}"
         except (ValueError, AttributeError):
             detail = (resp.text or "")[:300]
         status = resp.status_code
