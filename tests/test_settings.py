@@ -4,7 +4,7 @@ import settings
 
 def test_gemini_timeout_uses_default_for_missing_or_invalid(monkeypatch):
     monkeypatch.delenv("GEMINI_TIMEOUT_SECONDS", raising=False)
-    assert settings.gemini_timeout_seconds() == 35.0
+    assert settings.gemini_timeout_seconds() == 60.0
 
     monkeypatch.setenv("GEMINI_TIMEOUT_SECONDS", "not-a-number")
     assert settings.gemini_timeout_seconds() == 35.0
