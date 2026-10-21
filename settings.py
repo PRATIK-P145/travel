@@ -50,7 +50,7 @@ def _positive_number(name: str, default: float, minimum: float, maximum: float) 
 
 def gemini_timeout_seconds() -> float:
     """HTTP timeout for Gemini, configurable from .env (10–120 seconds)."""
-    return _positive_number("GEMINI_TIMEOUT_SECONDS", 35.0, 10.0, 120.0)
+    return _positive_number("GEMINI_TIMEOUT_SECONDS", 60.0, 10.0, 120.0)
 
 
 def gemini_max_output_tokens() -> int:
