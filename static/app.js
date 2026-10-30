@@ -291,8 +291,13 @@
     frag.appendChild(h("div", { class: "panel" },
       h("h2", { text: "Where to stay" }),
       h("div", { class: "stays" }, p.accommodation.map(function (s) {
-        return h("div", { class: "stay" }, h("h3", { text: s.area }), s.why ? h("p", { text: s.why }) : null,
-          s.est_per_night ? h("p", { text: "Rough room rate: about " + money(s.est_per_night, cur) + " per night (estimate)" }) : null);
+        return h("article", { class: "stay-card" },
+          h("div", { class: "stay-visual", "aria-hidden": "true" }, h("span", { text: "⌂" })),
+          h("div", { class: "stay-details" },
+            h("span", { class: "stay-label", text: "Recommended area" }),
+            h("h3", { class: "stay-title", text: s.area || "Suggested area" }),
+            s.why ? h("p", { class: "stay-reason", text: s.why }) : null,
+            s.est_per_night ? h("p", { class: "stay-rate", text: "About " + money(s.est_per_night, cur) + " / night · estimate" }) : null));
       }))));
 
     // Tips and caveats
